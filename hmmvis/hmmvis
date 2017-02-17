@@ -33,7 +33,7 @@ def loopfiles(args, list_path):
 			for path, subdirs, files in os.walk(str(args.fasta)):
 				for filename in files:
 					fasta_file = os.path.join(path, filename)
-					print fasta_file
+					#print fasta_file
 					runHmmer(args, list_path, fasta_file, f)
 			f.close()
 		#exit(1)
@@ -57,17 +57,21 @@ def runHmmer(args, list_path, file_path, f):
 	s = " "
 	cmd = ("hmmsearch -E 0.001 --domtblout", hmmpath, args.hmm, exportpath, '> /dev/null 2> /dev/null')
 	os.system(s.join( cmd ))
+	#print(s.join( cmd ))
 	# parse domtblout and save it as csv
 	with open(hmmpath, 'rU') as input:
-		for qresult in SearchIO.parse(input, 'hmmscan3-domtab'):
-			query_id = qresult.id
-			hits = qresult.hits
-			num_hits = len(hits)
-			acc = qresult.accession
-			if args.query:
-				f.write(''.join((basename, '\t', str(query_id),'\t', str(num_hits),'\t', str(group), '\n')))
-			else:
-				f.write(''.join((basename, '\t', str(acc),'\t', str(num_hits), '\t', str(group),'\n')))
+		try:
+			for qresult in SearchIO.parse(input, 'hmmscan3-domtab'):
+				query_id = qresult.id
+				hits = qresult.hits
+				num_hits = len(hits)
+				acc = qresult.accession
+				if args.query:
+					f.write(''.join((basename, '\t', str(query_id),'\t', str(num_hits),'\t', str(group), '\n')))
+				else:
+					f.write(''.join((basename, '\t', str(acc),'\t', str(num_hits), '\t', str(group),'\n')))
+		except ValueError:
+			print('parsing error on %s' % basename)
 
 def drawHeat(filename, args):
 	df = pd.read_table(filename, header=None)
@@ -122,9 +126,13 @@ def drawCluster(filename, args):
 		# get the series of all of the categories
 		group = merged.group
 		# map the colors to the series
+		merged = merged.sort(['group'])
 		merged.drop('group', axis=1, inplace=True)
 		group_colors = pd.Series(group).map(group_lut)
-		ax = sns.clustermap(merged, row_colors=group_colors, cmap='YlOrRd')
+		if args.keeporder:
+			ax = sns.clustermap(merged, row_colors=group_colors, cmap='YlOrRd', row_cluster=False, linewidths=0, yticklabels=True)
+		else:
+			ax = sns.clustermap(merged, row_colors=group_colors, cmap='YlOrRd', row_cluster=False, linewidths=0, yticklabels=True)
 		plt.setp(ax.ax_heatmap.get_yticklabels(), rotation=0)
 		plt.setp(ax.ax_heatmap.get_xticklabels(), rotation=90)
 		plt.savefig('cluster.png', bbox_inches='tight')
@@ -161,6 +169,8 @@ if __name__ == "__main__":
 						help='use colors for heatmap')
 	parser.add_argument('--normalize', action='store_true', dest='normalize',
 						help='normalize cluster map')
+	parser.add_argument('--keep_order', action='store_true', dest='keeporder',
+						help='do not cluster rows if groups are present')
 
 	parser.add_argument('--version', action='version', version='%(prog)s 0.1')
 	args = parser.parse_args()
